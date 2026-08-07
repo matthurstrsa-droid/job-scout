@@ -72,7 +72,7 @@ function LoginScreen({ onLogin }) {
 }
 
 function ScoreBar({ label, score }) {
-  const s = parseFloat(score) || 0;
+  const s = Math.round(parseFloat(score) || 0);
   return (
     <div style={{ marginBottom: "8px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
