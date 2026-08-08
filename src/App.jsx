@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { buildCV } from "./cvBuilder.js";
 
 const C = {
   bg: "#F6F4F0", card: "#FFFFFF", sage: "#4E7A68", sageLt: "#7AA896",
@@ -107,16 +108,32 @@ function JobCard({ job, onUpdate, expanded, onToggle, password }) {
     setAiLoading(true);
     setAiResult("");
     try {
-      const endpoint = mode === "tailor" ? "/api/tailor" : "/api/cover";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Auth": password },
-        body: JSON.stringify({ title: job.title, company: job.company, description: jobDesc }),
-      });
-      const data = await res.json();
-      setAiResult(data.text || "No response generated.");
-    } catch {
-      setAiResult("Something went wrong. Please try again.");
+      if (mode === "build") {
+        const res = await fetch("/api/build-cv", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Auth": password },
+          body: JSON.stringify({ title: job.title, company: job.company, description: jobDesc }),
+        });
+        const data = await res.json();
+        if (data.ok && data.cv) {
+          const filename = `Matthew_Hurst_${job.company.replace(/\s+/g, "_")}_CV.docx`;
+          await buildCV(data.cv, filename);
+          setAiResult("✅ CV downloaded! Check your downloads folder.");
+        } else {
+          setAiResult("CV generation failed. Please try again.");
+        }
+      } else {
+        const endpoint = mode === "tailor" ? "/api/tailor" : "/api/cover";
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Auth": password },
+          body: JSON.stringify({ title: job.title, company: job.company, description: jobDesc }),
+        });
+        const data = await res.json();
+        setAiResult(data.text || "No response generated.");
+      }
+    } catch(e) {
+      setAiResult("Something went wrong: " + e.message);
     }
     setAiLoading(false);
   }
@@ -228,6 +245,10 @@ function JobCard({ job, onUpdate, expanded, onToggle, password }) {
               style={{ padding: "7px 14px", background: aiPanel === "tailor" ? C.slate : "#EEF1F7", color: aiPanel === "tailor" ? "#fff" : C.slate, border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
               ✏️ Tailor CV
             </button>
+            <button onClick={() => setAiPanel(aiPanel === "build" ? null : "build")}
+              style={{ padding: "7px 14px", background: aiPanel === "build" ? C.sage : C.sageXlt, color: aiPanel === "build" ? "#fff" : C.sage, border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: 700 }}>
+              📄 Build CV
+            </button>
             <button onClick={() => setAiPanel(aiPanel === "cover" ? null : "cover")}
               style={{ padding: "7px 14px", background: aiPanel === "cover" ? C.slate : "#EEF1F7", color: aiPanel === "cover" ? "#fff" : C.slate, border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
               📝 Cover Letter
@@ -238,14 +259,14 @@ function JobCard({ job, onUpdate, expanded, onToggle, password }) {
           {aiPanel && (
             <div style={{ marginTop: "12px", background: C.bg, borderRadius: "8px", padding: "14px", border: `1px solid ${C.sand}` }}>
               <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: 700, color: C.slate }}>
-                {aiPanel === "tailor" ? "Paste the job description to tailor your CV:" : "Paste the job description to write a cover letter:"}
+                {aiPanel === "tailor" ? "Paste the job description to tailor your CV:" : aiPanel === "build" ? "Paste the job description to build a finished CV (.docx):" : "Paste the job description to write a cover letter:"}
               </p>
               <textarea value={jobDesc} onChange={e => setJobDesc(e.target.value)}
                 placeholder="Paste the full job description here..."
                 style={{ width: "100%", minHeight: "100px", borderRadius: "8px", border: `1px solid ${C.sand}`, padding: "8px 10px", fontSize: "12px", fontFamily: "inherit", resize: "vertical", color: C.text, background: C.card, outline: "none" }} />
               <button onClick={() => runAI(aiPanel)} disabled={aiLoading || !jobDesc.trim()}
                 style={{ marginTop: "8px", width: "100%", padding: "9px", background: aiLoading || !jobDesc.trim() ? C.sand : C.slate, color: aiLoading || !jobDesc.trim() ? C.muted : "#fff", border: "none", borderRadius: "8px", cursor: aiLoading || !jobDesc.trim() ? "default" : "pointer", fontWeight: 700, fontSize: "13px" }}>
-                {aiLoading ? "Working..." : aiPanel === "tailor" ? "Tailor my CV →" : "Write cover letter →"}
+                {aiLoading ? "Working..." : aiPanel === "tailor" ? "Tailor my CV →" : aiPanel === "build" ? "Build & download CV →" : "Write cover letter →"}
               </button>
               {aiResult && (
                 <div style={{ marginTop: "12px", background: C.card, borderRadius: "8px", padding: "14px", fontSize: "13px", color: C.text, lineHeight: 1.8, whiteSpace: "pre-wrap", border: `1px solid ${C.sand}` }}>
@@ -561,7 +582,7 @@ export default function App() {
   if (!password) return <LoginScreen onLogin={handleLogin} />;
 
   const filtered = jobs
-    .filter(j => filterStatus === "all" || j.status === filterStatus)
+    .filter(j => filterStatus === "all" || (j.status || "new") === filterStatus)
     .filter(j => !searchTerm || `${j.title} ${j.company}`.toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => {
       if (sortBy === "score") return overallScore(b) - overallScore(a);
