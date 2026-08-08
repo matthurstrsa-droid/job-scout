@@ -206,6 +206,7 @@ function JobCard({ job, onUpdate, expanded, onToggle, password }) {
           {/* Notes */}
           <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Add your notes here..."
             style={{ width: "100%", minHeight: "70px", borderRadius: "8px", border: `1px solid ${C.sand}`, padding: "8px 10px", fontSize: "12px", fontFamily: "inherit", resize: "vertical", color: C.text, background: C.bg, outline: "none" }} />
+          <CVPanel job={job} password={password} />
           <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
             <button onClick={saveNote} disabled={saving}
               style={{ padding: "7px 16px", background: saving ? C.sand : C.slate, color: saving ? C.muted : "#fff", border: "none", borderRadius: "8px", cursor: saving ? "default" : "pointer", fontSize: "12px", fontWeight: 600 }}>
@@ -259,6 +260,142 @@ function JobCard({ job, onUpdate, expanded, onToggle, password }) {
   );
 }
 
+
+
+function CVPanel({ job, password }) {
+  const [cvMeta, setCvMeta] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    // Load CV metadata when panel mounts
+    loadMeta();
+  }, [job.id]);
+
+  async function loadMeta() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/cv?jobId=${encodeURIComponent(job.id)}`, {
+        headers: { "X-Auth": password }
+      });
+      const data = await res.json();
+      setCvMeta(data.exists ? data : null);
+    } catch {}
+    setLoading(false);
+  }
+
+  async function handleUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch("/api/cv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Auth": password },
+        body: JSON.stringify({ jobId: job.id, filename: file.name, data: base64, mimeType: file.type }),
+      });
+      const data = await res.json();
+      if (data.ok) setCvMeta(data);
+      else setError("Upload failed");
+    } catch {
+      setError("Upload failed — please try again");
+    }
+    setUploading(false);
+  }
+
+  async function handleDownload() {
+    try {
+      const res = await fetch(`/api/cv?jobId=${encodeURIComponent(job.id)}`, {
+        headers: { "X-Auth": password }
+      });
+      const meta = await res.json();
+      if (!meta.exists) return;
+
+      // Fetch the data
+      const dataRes = await fetch(`/api/cv/data?jobId=${encodeURIComponent(job.id)}`, {
+        headers: { "X-Auth": password }
+      });
+      const { data } = await dataRes.json();
+      if (!data) return;
+
+      // Convert base64 to blob and download
+      const binary = atob(data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: meta.mimeType || "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = meta.filename || "cv.docx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Download failed");
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm("Remove this CV?")) return;
+    try {
+      await fetch(`/api/cv?jobId=${encodeURIComponent(job.id)}`, {
+        method: "DELETE",
+        headers: { "X-Auth": password }
+      });
+      setCvMeta(null);
+    } catch {}
+  }
+
+  if (loading) return <div style={{ fontSize: "12px", color: C.muted, padding: "6px 0" }}>Loading CV...</div>;
+
+  return (
+    <div style={{ marginTop: "8px" }}>
+      {cvMeta ? (
+        <div style={{ background: C.sageXlt, borderRadius: "8px", padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+          <div>
+            <p style={{ margin: "0 0 2px", fontSize: "12px", fontWeight: 700, color: C.sage }}>📄 {cvMeta.filename}</p>
+            <p style={{ margin: 0, fontSize: "10px", color: C.muted }}>
+              Uploaded {new Date(cvMeta.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              {" · "}{Math.round(cvMeta.size / 1024 * 0.75)}KB
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button onClick={handleDownload}
+              style={{ padding: "5px 12px", background: C.sage, color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
+              Download
+            </button>
+            <button onClick={handleDelete}
+              style={{ padding: "5px 10px", background: C.redLt, color: C.red, border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "11px" }}>
+              ✕
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <label style={{
+            display: "inline-block", padding: "7px 14px",
+            background: uploading ? C.sand : "#EEF1F7",
+            color: uploading ? C.muted : C.slate,
+            borderRadius: "8px", cursor: uploading ? "default" : "pointer",
+            fontSize: "12px", fontWeight: 600, border: `1px dashed ${C.sand}`,
+          }}>
+            {uploading ? "Uploading..." : "📎 Attach CV"}
+            <input type="file" accept=".docx,.pdf,.doc" onChange={handleUpload} style={{ display: "none" }} disabled={uploading} />
+          </label>
+          <span style={{ fontSize: "11px", color: C.muted, marginLeft: "8px" }}>docx or pdf</span>
+        </div>
+      )}
+      {error && <p style={{ margin: "4px 0 0", fontSize: "11px", color: C.red }}>{error}</p>}
+    </div>
+  );
+}
 
 function AddJobModal({ onAdd, onClose, password }) {
   const [form, setForm] = useState({
