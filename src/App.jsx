@@ -259,9 +259,133 @@ function JobCard({ job, onUpdate, expanded, onToggle, password }) {
   );
 }
 
+
+function AddJobModal({ onAdd, onClose, password }) {
+  const [form, setForm] = useState({
+    title: "", company: "", location: "Copenhagen", url: "",
+    summary: "", notes: "", status: "new",
+    flexibility_score: "", autonomy_score: "", culture_score: "", salary_score: "",
+    source: "Self-found", adjacent: false,
+  });
+  const [scoring, setScoring] = useState(false);
+  const [scored, setScored] = useState(false);
+
+  function update(field, val) { setForm(f => ({ ...f, [field]: val })); }
+
+  async function autoScore() {
+    if (!form.title || !form.company) return;
+    setScoring(true);
+    try {
+      const res = await fetch("/api/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Auth": password },
+        body: JSON.stringify({ title: form.title, company: form.company, summary: form.summary }),
+      });
+      const data = await res.json();
+      if (data.scores) {
+        setForm(f => ({ ...f, ...data.scores }));
+        setScored(true);
+      }
+    } catch {}
+    setScoring(false);
+  }
+
+  function handleAdd() {
+    const id = `${form.title}-${form.company}`.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const job = {
+      ...form,
+      id,
+      foundDate: new Date().toISOString().split("T")[0],
+      flexibility_score: parseFloat(form.flexibility_score) || 0,
+      autonomy_score:    parseFloat(form.autonomy_score)    || 0,
+      culture_score:     parseFloat(form.culture_score)     || 0,
+      salary_score:      parseFloat(form.salary_score)      || 0,
+      why_matt: form.summary,
+      red_flags: "", green_flags: "",
+    };
+    onAdd(job);
+    onClose();
+  }
+
+  const inputStyle = { width: "100%", padding: "8px 10px", borderRadius: "8px", border: `1px solid ${C.sand}`, fontSize: "13px", fontFamily: "inherit", color: C.text, background: C.bg, outline: "none", marginBottom: "10px" };
+  const labelStyle = { fontSize: "11px", fontWeight: 700, color: C.textSub, textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: "4px" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#00000060", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
+      <div style={{ background: C.card, borderRadius: "16px", padding: "24px", maxWidth: "520px", width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 8px 32px #00000030" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: C.slate }}>Add job manually</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: C.muted }}>✕</button>
+        </div>
+
+        <label style={labelStyle}>Job title *</label>
+        <input value={form.title} onChange={e => update("title", e.target.value)} placeholder="e.g. Senior Manager, Global Demand Planning" style={inputStyle} />
+
+        <label style={labelStyle}>Company *</label>
+        <input value={form.company} onChange={e => update("company", e.target.value)} placeholder="e.g. Fiskars Group" style={inputStyle} />
+
+        <label style={labelStyle}>Location</label>
+        <input value={form.location} onChange={e => update("location", e.target.value)} placeholder="e.g. Frederiksberg, Copenhagen" style={inputStyle} />
+
+        <label style={labelStyle}>Job URL</label>
+        <input value={form.url} onChange={e => update("url", e.target.value)} placeholder="https://..." style={inputStyle} />
+
+        <label style={labelStyle}>CV / notes (paste Drive link or version info)</label>
+        <textarea value={form.notes} onChange={e => update("notes", e.target.value)} placeholder="e.g. CV: Fiskars tailored v1 | Drive: https://drive.google.com/..."
+          style={{ ...inputStyle, minHeight: "70px", resize: "vertical" }} />
+
+        <label style={labelStyle}>Summary (optional — helps with scoring)</label>
+        <textarea value={form.summary} onChange={e => update("summary", e.target.value)} placeholder="Brief description of the role..."
+          style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} />
+
+        <label style={labelStyle}>Status</label>
+        <select value={form.status} onChange={e => update("status", e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+          {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+
+        <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "14px" }}>
+          <input type="checkbox" id="adjacent" checked={form.adjacent} onChange={e => update("adjacent", e.target.checked)} />
+          <label htmlFor="adjacent" style={{ fontSize: "13px", color: C.textSub, cursor: "pointer" }}>Adjacent role (outside planning/retail)</label>
+        </div>
+
+        {/* Scores */}
+        <div style={{ background: C.bg, borderRadius: "8px", padding: "12px", marginBottom: "14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 700, color: C.textSub, textTransform: "uppercase", letterSpacing: "0.04em" }}>Scores (0–100)</span>
+            <button onClick={autoScore} disabled={scoring || !form.title || !form.company}
+              style={{ padding: "5px 12px", background: scoring ? C.sand : C.sage, color: scoring ? C.muted : "#fff", border: "none", borderRadius: "6px", cursor: scoring ? "default" : "pointer", fontSize: "11px", fontWeight: 700 }}>
+              {scoring ? "Scoring..." : scored ? "✓ Auto-scored" : "Auto-score with AI"}
+            </button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            {[["flexibility_score", "Flexibility (35%)"], ["autonomy_score", "Autonomy (30%)"], ["culture_score", "Culture (20%)"], ["salary_score", "Salary fit (15%)"]].map(([field, label]) => (
+              <div key={field}>
+                <label style={{ ...labelStyle, marginBottom: "2px" }}>{label}</label>
+                <input type="number" min="0" max="100" value={form[field]} onChange={e => update(field, e.target.value)}
+                  placeholder="0–100" style={{ ...inputStyle, marginBottom: 0 }} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={handleAdd} disabled={!form.title || !form.company}
+            style={{ flex: 1, padding: "11px", background: !form.title || !form.company ? C.sand : C.sage, color: !form.title || !form.company ? C.muted : "#fff", border: "none", borderRadius: "8px", cursor: !form.title || !form.company ? "default" : "pointer", fontWeight: 700, fontSize: "14px" }}>
+            Add to dashboard
+          </button>
+          <button onClick={onClose} style={{ padding: "11px 18px", background: C.bg, color: C.textSub, border: `1px solid ${C.sand}`, borderRadius: "8px", cursor: "pointer", fontSize: "14px" }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [password, setPassword] = useState(() => sessionStorage.getItem("scout_pw") || "");
   const [jobs, setJobs] = useState([]);
+  const [showAddJob, setShowAddJob] = useState(false);
   const [lastRun, setLastRun] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -283,6 +407,14 @@ export default function App() {
 
   async function updateJob(id, updates) {
     const newJobs = jobs.map(j => j.id === id ? { ...j, ...updates } : j);
+    setJobs(newJobs);
+    try {
+      await apiFetch("/api/jobs", "PUT", { jobs: newJobs, lastRun }, password);
+    } catch {}
+  }
+
+  async function handleAddJob(job) {
+    const newJobs = [job, ...jobs];
     setJobs(newJobs);
     try {
       await apiFetch("/api/jobs", "PUT", { jobs: newJobs, lastRun }, password);
@@ -409,6 +541,13 @@ export default function App() {
         </div>
       </div>
 
+      {showAddJob && (
+        <AddJobModal
+          onAdd={handleAddJob}
+          onClose={() => setShowAddJob(false)}
+          password={password}
+        />
+      )}
       <style>{`* { box-sizing: border-box; } button:hover:not(:disabled) { opacity: 0.85; } textarea:focus, input:focus { border-color: #4E7A68 !important; box-shadow: 0 0 0 3px #E8F0ED; }`}</style>
     </div>
   );
