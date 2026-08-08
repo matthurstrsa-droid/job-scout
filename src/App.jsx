@@ -229,18 +229,26 @@ function JobCard({ job, onUpdate, expanded, onToggle, password }) {
               style={{ padding: "7px 16px", background: saving ? C.sand : C.slate, color: saving ? C.muted : "#fff", border: "none", borderRadius: "8px", cursor: saving ? "default" : "pointer", fontSize: "12px", fontWeight: 600 }}>
               {saving ? "Saving..." : "Save note"}
             </button>
-            {job.url && job.url !== "#" ? (
-              <a href={job.url} target="_blank" rel="noreferrer"
-                style={{ padding: "7px 16px", background: C.sage, color: "#fff", borderRadius: "8px", textDecoration: "none", fontSize: "12px", fontWeight: 600 }}>
-                View job →
-              </a>
-            ) : (
-              <a href={`https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(job.title + " " + job.company)}&location=Copenhagen`}
-                target="_blank" rel="noreferrer"
-                style={{ padding: "7px 16px", background: C.sage, color: "#fff", borderRadius: "8px", textDecoration: "none", fontSize: "12px", fontWeight: 600 }}>
-                Search LinkedIn →
-              </a>
-            )}
+            {(() => {
+              const isGoodUrl = job.url && job.url !== "#" &&
+                !job.url.includes("glassdoor.com") &&
+                !job.url.includes("google.com/search") &&
+                !job.url.includes("/job-listing/") === false ||
+                (job.url && job.url.match(/\/job\/|jobId=|currentJobId=|jobs\/view\//));
+              const linkedInUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(job.title + " " + job.company)}&location=Copenhagen`;
+              const hasDirectUrl = job.url && job.url !== "#" && !job.url.includes("glassdoor.com") && !job.url.includes("google.com/search");
+              return hasDirectUrl ? (
+                <a href={job.url} target="_blank" rel="noreferrer"
+                  style={{ padding: "7px 16px", background: C.sage, color: "#fff", borderRadius: "8px", textDecoration: "none", fontSize: "12px", fontWeight: 600 }}>
+                  View job →
+                </a>
+              ) : (
+                <a href={linkedInUrl} target="_blank" rel="noreferrer"
+                  style={{ padding: "7px 16px", background: C.sage, color: "#fff", borderRadius: "8px", textDecoration: "none", fontSize: "12px", fontWeight: 600 }}>
+                  Search LinkedIn →
+                </a>
+              );
+            })()}
             <button onClick={() => setAiPanel(aiPanel === "tailor" ? null : "tailor")}
               style={{ padding: "7px 14px", background: aiPanel === "tailor" ? C.slate : "#EEF1F7", color: aiPanel === "tailor" ? "#fff" : C.slate, border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
               ✏️ Tailor CV
