@@ -590,10 +590,16 @@ export default function App() {
               {" · "} Next scan: Thursday 8am
             </p>
           </div>
-          <button onClick={() => { sessionStorage.removeItem("scout_pw"); setPassword(""); }}
-            style={{ padding: "7px 12px", background: "none", color: C.muted, border: `1px solid ${C.muted}40`, borderRadius: "8px", cursor: "pointer", fontSize: "12px" }}>
-            Lock
-          </button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button onClick={() => setShowAddJob(true)}
+              style={{ padding: "7px 14px", background: C.sage, color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: 700, fontSize: "12px" }}>
+              + Add job
+            </button>
+            <button onClick={() => { sessionStorage.removeItem("scout_pw"); setPassword(""); }}
+              style={{ padding: "7px 12px", background: "none", color: C.muted, border: `1px solid ${C.muted}40`, borderRadius: "8px", cursor: "pointer", fontSize: "12px" }}>
+              Lock
+            </button>
+          </div>
         </div>
       </div>
 
